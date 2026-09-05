@@ -1,0 +1,100 @@
+name: build-and-deploy
+
+on:
+  push:
+    branches: [main]
+  # Lets you re-run a deploy by hand, optionally pinning an older SHA.
+  # This is how you roll back: run the workflow with a previous commit's tag.
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (blank = build this commit)"
+        required: false
+
+# Required for OIDC. Without id-token: write the federated auth below fails
+# with a confusing "Not authorized to perform sts:AssumeRoleWithWebIdentity".
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  CLUSTER_NAME: platform-lab
+  ECR_REPO: platform-lab
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Unit tests
+        working-directory: app
+        run: go test -v ./...
+      - name: Vet
+        working-directory: app
+        run: go vet ./...
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No stored AWS access keys. GitHub mints a short-lived OIDC token,
+      # AWS trades it for temporary credentials that expire in minutes.
+      # Set AWS_ROLE_ARN in repo secrets; see README for the trust policy.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # The git SHA is the image tag. Never "latest": a tag must always
+      # point at exactly one commit, forever, or rollback is guesswork.
+      - name: Resolve image tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.image_tag }}"
+          if [ -z "$TAG" ]; then TAG="${GITHUB_SHA::7}"; fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Deploying tag: $TAG"
+
+      - name: Build and push
+        # Skipped when redeploying an existing tag (the rollback path).
+        if: github.event.inputs.image_tag == ''
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          docker build --build-arg VERSION="$TAG" -t "$REGISTRY/$ECR_REPO:$TAG" .
+          docker push "$REGISTRY/$ECR_REPO:$TAG"
+
+      - name: Configure kubectl
+        run: aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"
+
+      # Substitute the real image into the manifest, then apply.
+      # Phase 2 replaces this sed with `helm upgrade --set image.tag=$TAG`.
+      - name: Deploy
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          sed "s|IMAGE_PLACEHOLDER|$REGISTRY/$ECR_REPO:$TAG|g" k8s/deployment.yaml \
+            | kubectl apply -f -
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/hpa.yaml
+
+      # Fails the build if pods don't become healthy in 3 minutes, instead of
+      # reporting green while the rollout is quietly stuck.
+      - name: Wait for rollout
+        run: kubectl rollout status deployment/platform-lab --timeout=180s
+
+      - name: Show running version
+        run: kubectl get pods -l app=platform-lab -o wide

@@ -1,0 +1,10 @@
+.git
+.github
+terraform
+k8s
+*.md
+Makefile
+teardown.sh
+.terraform
+*.tfstate
+*.tfstate.*
