@@ -1,0 +1,20 @@
+# LocalStack: a fake AWS that runs in Docker on your laptop.
+# Real AWS APIs, real Terraform, zero cost.
+#
+# Start it:  docker compose up -d
+# Stop it:   docker compose down
+#
+# Everything is wiped on `down`. That is a feature here: you can destroy
+# and rebuild as often as you like.
+
+services:
+  localstack:
+    image: localstack/localstack:3
+    container_name: localstack
+    ports:
+      - "4566:4566"        # every AWS service answers on this one port
+    environment:
+      - SERVICES=s3,dynamodb,iam,sqs,sts,ec2
+      - DEBUG=0
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"

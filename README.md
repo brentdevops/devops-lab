@@ -4,7 +4,7 @@ A small Go service, containerized, running on EKS, deployed by GitHub Actions.
 Deliberately minimal: 16 files, no Helm, no modules, no monitoring yet.
 Phase 2 refactors this into Terraform modules and a Helm chart.
 
-Account `493116365821` · region `us-east-1` · cluster `platform-lab`
+Account `604834692038` · region `us-east-1` · cluster `platform-lab`
 
 ---
 
@@ -69,7 +69,7 @@ cat > trust.json <<'EOF'
   "Statement": [{
     "Effect": "Allow",
     "Principal": {
-      "Federated": "arn:aws:iam::493116365821:oidc-provider/token.actions.githubusercontent.com"
+      "Federated": "arn:aws:iam::604834692038:oidc-provider/token.actions.githubusercontent.com"
     },
     "Action": "sts:AssumeRoleWithWebIdentity",
     "Condition": {
@@ -99,18 +99,18 @@ Give that role cluster access:
 
 ```bash
 aws eks create-access-entry --cluster-name platform-lab \
-  --principal-arn arn:aws:iam::493116365821:role/githubActionsRole \
+  --principal-arn arn:aws:iam::604834692038:role/githubActionsRole \
   --region us-east-1
 
 aws eks associate-access-policy --cluster-name platform-lab \
-  --principal-arn arn:aws:iam::493116365821:role/githubActionsRole \
+  --principal-arn arn:aws:iam::604834692038:role/githubActionsRole \
   --access-scope type=cluster \
   --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
   --region us-east-1
 ```
 
 Then in GitHub: **Settings → Secrets and variables → Actions → New secret**
-named `AWS_ROLE_ARN`, value `arn:aws:iam::493116365821:role/githubActionsRole`.
+named `AWS_ROLE_ARN`, value `arn:aws:iam::604834692038:role/githubActionsRole`.
 
 Push to `main` and watch the Actions tab.
 

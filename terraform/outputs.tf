@@ -1,19 +1,24 @@
 output "cluster_name" {
   description = "EKS cluster name."
-  value       = aws_eks_cluster.main.name
+  value       = module.eks.cluster_name
 }
 
 output "cluster_endpoint" {
   description = "Kubernetes API server endpoint."
-  value       = aws_eks_cluster.main.endpoint
+  value       = module.eks.cluster_endpoint
 }
 
 output "ecr_repository_url" {
   description = "Push target for the app image."
-  value       = aws_ecr_repository.app.repository_url
+  value       = module.ecr.repository_url
+}
+
+output "vpc_id" {
+  description = "VPC ID."
+  value       = module.vpc.vpc_id
 }
 
 output "kubeconfig_command" {
-  description = "Run this to point kubectl at the new cluster."
-  value       = "aws eks update-kubeconfig --region ${var.region} --name ${aws_eks_cluster.main.name}"
+  description = "Point kubectl at this cluster."
+  value       = "aws eks update-kubeconfig --region ${var.region} --name ${module.eks.cluster_name}"
 }

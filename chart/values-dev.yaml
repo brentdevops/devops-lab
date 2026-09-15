@@ -1,0 +1,7 @@
+# Development overrides. Used with:
+#   helm upgrade --install platform-lab ./chart -f chart/values-dev.yaml --set image.tag=<sha>
+
+replicaCount: 2
+
+autoscaling:
+  enabled: false

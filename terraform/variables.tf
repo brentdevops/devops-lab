@@ -1,13 +1,22 @@
 variable "region" {
-  description = "AWS region for all resources."
+  description = "AWS region."
   type        = string
-  default     = "us-east-1"
+}
+
+variable "environment" {
+  description = "Environment name, applied as a tag to every resource."
+  type        = string
 }
 
 variable "cluster_name" {
-  description = "Name of the EKS cluster; also used to name the ECR repo and VPC."
+  description = "Cluster name; also names the VPC and ECR repository."
   type        = string
-  default     = "platform-lab"
+}
+
+variable "vpc_cidr" {
+  description = "VPC CIDR range."
+  type        = string
+  default     = "10.0.0.0/16"
 }
 
 variable "kubernetes_version" {
@@ -17,30 +26,31 @@ variable "kubernetes_version" {
 }
 
 variable "instance_type" {
-  description = "Worker node instance type. t3.small is 2 vCPU / 2GB with an 8-pod ENI ceiling."
+  description = "Worker node instance type."
   type        = string
   default     = "t3.small"
 }
 
 variable "node_count" {
-  description = "Number of worker nodes. 2 x t3.small = 4 vCPU, under the 5 vCPU account quota."
+  description = "Number of worker nodes."
   type        = number
   default     = 2
+}
 
-  validation {
-    condition     = var.node_count >= 2
-    error_message = "Use at least 2 nodes; a single node cannot demonstrate node-failure recovery."
-  }
+variable "image_tag_mutability" {
+  description = "ECR tag mutability. IMMUTABLE in prod so a pushed tag can never be overwritten."
+  type        = string
+  default     = "MUTABLE"
 }
 
 variable "cluster_role_name" {
-  description = "Existing IAM role the EKS control plane assumes."
+  description = "Existing IAM role for the control plane."
   type        = string
   default     = "eksClusterRole"
 }
 
 variable "node_role_name" {
-  description = "Existing IAM role the worker nodes assume."
+  description = "Existing IAM role for worker nodes."
   type        = string
   default     = "eksNodeRole"
 }

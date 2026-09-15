@@ -1,0 +1,31 @@
+# Production overrides.
+#
+# Same chart, same image, different inputs — this is what "build once,
+# deploy anywhere" means in practice. Nothing is rebuilt between environments.
+
+replicaCount: 3
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+# Spread replicas across nodes so losing one node cannot take out the service.
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: platform-lab

@@ -1,0 +1,53 @@
+# Defaults for every environment. Per-environment files override these,
+# and --set on the command line overrides both.
+
+replicaCount: 2
+
+image:
+  repository: 604834692038.dkr.ecr.us-east-1.amazonaws.com/platform-lab
+  # Empty on purpose. The pipeline passes --set image.tag=<git sha>.
+  # A missing tag fails the template rather than silently deploying "latest".
+  tag: ""
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 32Mi
+  limits:
+    cpu: 200m
+    memory: 64Mi
+
+# Liveness failing restarts the container.
+# Readiness failing only removes it from Service endpoints.
+probes:
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 3
+    periodSeconds: 10
+  readiness:
+    path: /healthz
+    initialDelaySeconds: 2
+    periodSeconds: 5
+
+autoscaling:
+  # Off by default: the HPA needs metrics-server, which EKS does not install.
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 60
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

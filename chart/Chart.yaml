@@ -1,0 +1,11 @@
+apiVersion: v2
+name: platform-lab
+description: The platform lab demo service
+type: application
+
+# version is the chart's own version. Bump when the templates change.
+version: 0.1.0
+
+# appVersion is the default application version. The pipeline overrides this
+# per deploy with --set image.tag=<sha>, so it is only a fallback.
+appVersion: "1.0.0"

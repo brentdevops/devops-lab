@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # Destroys every AWS resource this lab creates.
-# The EKS control plane bills ~$0.10/hour whether or not anything is deployed,
-# so run this whenever you're done for more than a day.
 set -euo pipefail
 
-cd "$(dirname "$0")/terraform"
+cd "$(dirname "$0")"
 
 echo "This will destroy the EKS cluster, node group, VPC and ECR repository."
 read -rp "Type 'destroy' to confirm: " reply
@@ -13,16 +11,19 @@ if [ "$reply" != "destroy" ]; then
   exit 1
 fi
 
-# Kubernetes LoadBalancer Services create AWS load balancers that Terraform
-# does not know about. Left behind, they keep billing AND block VPC deletion.
+# Uninstall the Helm release first so any LoadBalancer Services it created are
+# removed. Those AWS load balancers are invisible to Terraform: left behind,
+# they keep billing and block VPC deletion.
 if kubectl config current-context >/dev/null 2>&1; then
-  echo "Removing LoadBalancer services first..."
+  echo "Uninstalling Helm release..."
+  helm uninstall platform-lab || true
   kubectl delete svc --all-namespaces \
     --field-selector spec.type=LoadBalancer --ignore-not-found || true
   sleep 20
 fi
 
-terraform destroy
+cd terraform
+terraform destroy -var-file=dev.tfvars
 
 echo
 echo "Done. Verify nothing survived:"

@@ -1,0 +1,117 @@
+name: terraform-ci
+
+# Runs on pull requests only, and only when the LocalStack config changes.
+# Nothing here touches real AWS or costs money.
+on:
+  pull_request:
+    paths:
+      - "local/localstack/**"
+      - ".github/workflows/terraform-ci.yml"
+
+permissions:
+  contents: read
+  pull-requests: write   # needed to post the plan as a PR comment
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    # LocalStack runs as a service container alongside the job.
+    # The runner gets its own throwaway fake AWS for this one run.
+    services:
+      localstack:
+        image: localstack/localstack:3
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: s3,dynamodb,iam,sqs,sts,ec2
+        options: >-
+          --health-cmd "curl -f http://localhost:4566/_localstack/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: local/localstack
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      # Formatting. Fails the PR if anyone committed unformatted HCL.
+      # Cheap to enforce, and stops pointless whitespace diffs in review.
+      - name: Format check
+        id: fmt
+        run: terraform fmt -check -recursive -diff
+        continue-on-error: true
+
+      - name: Init
+        run: terraform init -input=false
+
+      # Syntax and internal consistency. Catches typos and bad references
+      # without talking to any provider.
+      - name: Validate
+        id: validate
+        run: terraform validate -no-color
+
+      # The actual value of this pipeline: the reviewer sees what would change
+      # before anyone approves it.
+      - name: Plan
+        id: plan
+        run: |
+          terraform plan -input=false -no-color -var-file=dev.tfvars > plan.txt 2>&1
+          echo "exitcode=$?" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      # Post the plan as a comment so it's reviewable in the PR itself,
+      # rather than buried in job logs nobody opens.
+      - name: Comment plan on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let plan = fs.readFileSync('local/localstack/plan.txt', 'utf8');
+
+            // GitHub comments cap at 65536 chars. Truncate from the top,
+            // because the summary line at the bottom is what matters.
+            const MAX = 60000;
+            if (plan.length > MAX) {
+              plan = '...(truncated)...\n' + plan.slice(plan.length - MAX);
+            }
+
+            const body = [
+              '### Terraform plan',
+              '',
+              `Format: \`${{ steps.fmt.outcome }}\``,
+              `Validate: \`${{ steps.validate.outcome }}\``,
+              '',
+              '<details><summary>Show plan</summary>',
+              '',
+              '```hcl',
+              plan,
+              '```',
+              '',
+              '</details>',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+      # Fail the check if fmt or plan failed, so the PR can't be merged green
+      # on a broken config.
+      - name: Fail on errors
+        if: steps.fmt.outcome == 'failure' || steps.plan.outcome == 'failure'
+        run: |
+          echo "fmt: ${{ steps.fmt.outcome }}"
+          echo "plan: ${{ steps.plan.outcome }}"
+          cat plan.txt
+          exit 1
