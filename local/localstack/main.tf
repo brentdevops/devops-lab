@@ -136,3 +136,20 @@ resource "aws_iam_role_policy" "app" {
     ]
   })
 }
+
+# Notifications queue, requested by the notifications team.
+# Same pattern as the main queue: failures land in a DLQ after 3 attempts.
+
+resource "aws_sqs_queue" "notifications_dlq" {
+  name = "${var.name_prefix}-notifications-dlq"
+}
+
+resource "aws_sqs_queue" "notifications" {
+  name                       = "${var.name_prefix}-notifications"
+  visibility_timeout_seconds = 30
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.notifications_dlq.arn
+    maxReceiveCount     = 3
+  })
+}
